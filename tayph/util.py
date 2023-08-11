@@ -360,7 +360,7 @@ def read_wave_from_e2ds_header(h,mode='HARPS'):
 
 
 
-def read_wave_from_makee_header(h):
+def read_wave_from_makee_header(h,slice_val=None):
     import numpy as np
     npx = h['NAXIS1']
     no = h['NAXIS2']
@@ -379,4 +379,7 @@ def read_wave_from_makee_header(h):
         #order.
 
         wave[i] = np.poly1d(coeffs)(x)
+
+    if slice_val:
+        wave = wave[:slice_val]
     return(wave)

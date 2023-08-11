@@ -1331,6 +1331,8 @@ def read_hires_makee(inpath,filelist,construct_s1d=True,N_CCD=3):
     airmass=np.array([])
     berv=np.array([])
     wave=[]
+    slice_val = 23
+    print("hello")
 
     catkeyword = 'OBSTYPE'
     #bervkeyword = 'HELIOVEL'
@@ -1346,6 +1348,7 @@ def read_hires_makee(inpath,filelist,construct_s1d=True,N_CCD=3):
             print(f'------{filelist[i]}', end="\r")
             hdul = fits.open(inpath/filelist[i])
             data1 = copy.deepcopy(hdul[0].data)
+            data1 = data1[:slice_val]
             hdr1 = hdul[0].header
             hdul.close()
             del hdul[0].data
@@ -1367,12 +1370,13 @@ def read_hires_makee(inpath,filelist,construct_s1d=True,N_CCD=3):
                 date.append(hdr1['DATE-OBS']+'T'+str(hdr1['UTC']))#.replace(':','-'))
                 mjd=np.append(mjd,float(hdr1['MJD']))
                 npx=np.append(npx,int(hdr1['NAXIS1']))
-                norders=np.append(norders,int(hdr1['NAXIS2'])+int(hdr2['NAXIS2'])+
+                norders=np.append(norders,len(data1)+int(hdr2['NAXIS2'])+
                 int(hdr3['NAXIS2']))
 
                 berv_i= calculateberv(hdr1["DATE"],[hdr1['LATITUDE'],hdr1['LONGITUD'],4145],hdr1["RA2000"],
                 hdr1["DEC2000"],"HIRES-MAKEE")
                 #print(yest)
+
 
                 berv=np.append(berv,berv_i)
                 airmass=np.append(airmass,float(hdr1['AIRMASS']))
@@ -1380,7 +1384,7 @@ def read_hires_makee(inpath,filelist,construct_s1d=True,N_CCD=3):
                 e2ds.append(merged_e2ds)#Stack them all in a massive E2DS matrix.
 
 
-                wavedata1=ops.vactoair(ut.read_wave_from_makee_header(hdr1)/10.0)#convert to nm.
+                wavedata1=ops.vactoair(ut.read_wave_from_makee_header(hdr1,slice_val)/10.0)#convert to nm.
                 wavedata2=ops.vactoair(ut.read_wave_from_makee_header(hdr2)/10.0)#and back to air.
                 wavedata3=ops.vactoair(ut.read_wave_from_makee_header(hdr3)/10.0)
 

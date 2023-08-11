@@ -888,7 +888,7 @@ def filter_ccf(rv,ccf,v_width):
         ccf_f[i] = ccf_row-wiggle
     return(ccf_f,wiggles)
 
-def construct_KpVsys(rv,ccf,ccf_e,dp,kprange=[0,300],dkp=1.0,parallel=True,transit=True,phase=[]):
+def construct_KpVsys(rv,ccf,ccf_e,dp,kprange=[0,400],dkp=1.0,parallel=True,transit=True,phase=[]):
     """The name says it all. Do good tests."""
     import tayph.functions as fun
     import tayph.operations as ops
