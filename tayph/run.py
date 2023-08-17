@@ -583,6 +583,7 @@ def run_instance(p,parallel=True,xcor_parallel=False):
     if do_berv_correction:
         rv_cor += sp.berv(dp)
     if do_keplerian_correction:
+        #pdb.set_trace()
         rv_cor-=sp.RV_star(dp)*(1.0)
 
     gamma = 1.0+(rv_cor*u.km/u.s/const.c)#Doppler factor.
@@ -1457,7 +1458,7 @@ config=False,save_figure=True,skysub=False,rawpath=None,nod='both'):
     import tayph.masking as masking
     import tayph.models as models
     from tayph.read import read_harpslike, read_espresso, read_uves, read_carmenes,read_fies,read_foces
-    from tayph.read import read_spirou, read_gianob, read_crires, read_hires_makee, read_nirps
+    from tayph.read import read_spirou, read_gianob, read_crires, read_hires_makee, read_nirps,read_maroonx
     from astropy.io import fits
     import astropy.constants as const
     import astropy.units as u
@@ -1486,10 +1487,10 @@ config=False,save_figure=True,skysub=False,rawpath=None,nod='both'):
     typetest(mode,str,'mode in read_e2ds()')
 
     if mode not in ['HARPS','HARPSN','HARPS-N','ESPRESSO','UVES-red','UVES-blue',
-        'CARMENES-VIS','CARMENES-NIR','SPIROU','GIANO-B','CRIRES','HIRES-MAKEE','FIES','NIRPS','FOCES']:
+        'CARMENES-VIS','CARMENES-NIR','SPIROU','GIANO-B','CRIRES','HIRES-MAKEE','FIES','NIRPS','FOCES','MAROON-X']:
         raise ValueError("in read_e2ds: instrument needs to be set to HARPS, HARPSN, UVES-red, "
             "UVES-blue CARMENES-VIS, CARMENES-NIR, SPIROU, GIANO-B, CRIRES, HIRES-MAKEE, FIES, "
-            "NIRPS or ESPRESSO.")
+            "NIRPS, MAROON-X or ESPRESSO.")
 
 
 
@@ -1537,9 +1538,9 @@ config=False,save_figure=True,skysub=False,rawpath=None,nod='both'):
         if Path(f).suffix.lower() == '.fits' and f.startswith('.') == False:
             filelist.append(f)
 
-    if len(filelist) == 0:
-        raise FileNotFoundError(f" in read_e2ds: input folder {str(inpath)} does not contain "
-        "FITS files.")
+    #if len(filelist) == 0:
+        #raise FileNotFoundError(f" in read_e2ds: input folder {str(inpath)} does not contain "
+        #"FITS files.")
 
 
     #MODE SWITCHING AND READING:
@@ -1573,6 +1574,8 @@ config=False,save_figure=True,skysub=False,rawpath=None,nod='both'):
         DATA = read_nirps(inpath,filelist,read_s1d=read_s1d,skysub=skysub)
     elif mode == 'FOCES':
         DATA = read_foces(inpath, filelist, mode)
+    elif mode == 'MAROON-X':
+        DATA = read_maroonx(inpath, filelist, mode)
     else:
         raise ValueError(f'Error in read_e2ds: {mode} is not a valid instrument.')
 
@@ -1632,9 +1635,9 @@ config=False,save_figure=True,skysub=False,rawpath=None,nod='both'):
     #6-The wave frames should have the same dimensions as the e2ds frames.
 
     #Test 1
-    if e2ds_count == 0:
-        raise FileNotFoundError(f"in read_e2ds: The input folder {str(inpath)} does not contain "
-            "files recognised as e2ds-format FITS files with SCIENCE keywords.")
+    # if e2ds_count == 0:
+    #     raise FileNotFoundError(f"in read_e2ds: The input folder {str(inpath)} does not contain "
+    #         "files recognised as e2ds-format FITS files with SCIENCE keywords.")
     #Test 2,3
     if read_s1d:
         if len(wave1d) != len(s1d):
