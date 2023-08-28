@@ -1388,6 +1388,7 @@ def read_hires_makee(inpath,filelist,construct_s1d=True,N_CCD=3):
 
                 merged_wave = np.vstack((wavedata1,wavedata2,wavedata3))
                 gamma = (1.0-(berv_i*u.km/u.s/const.c).decompose().value)#BERV.
+                gamma  = 1
                 wave.append(merged_wave*gamma)#Remove BERV.
 
 
@@ -1611,6 +1612,24 @@ def read_foces(inpath,filelist,mode,construct_s1d=True):
     return (output)
 
 def read_maroonx(inpath,filelist,construct_s1d=False):
+    """
+    This is a working read function for the Maroon-X spectrograph. It processes the reduced 2D echelle spectra, which
+    are formatted as an .npz file, reads the relevant information, and constructs the files in a way that Tayph can
+    interpret.
+
+    To use this read function put your reduced data in a directory with the same name, without the .npz
+
+    Parameters
+    ----------
+    inpath
+    filelist
+    construct_s1d
+
+    Returns
+    -------
+    data files that can be cross-correlated
+    """
+
     import numpy as np
     import matplotlib.pyplot as plt
     from astropy.time import Time
@@ -1626,36 +1645,42 @@ def read_maroonx(inpath,filelist,construct_s1d=False):
     data = np.load(file_name)
     flux_red = data['flux_red']
     flux_blue = data['flux_blue']
-    wavelengths_red = data['wavelengths_red']
-    wavelengths_blue = data['wavelengths_blue']
 
-    # Pad the blue flux array with np.nan values to match the dimensions of the red flux array
-    padded_flux_blue = np.pad(flux_blue, ((0, flux_red.shape[0] - flux_blue.shape[0]), (0, 0), (0, 0)),
-                              constant_values=np.nan)
+    wavelengths_red = ops.vactoair(data['wavelengths_red'])
+    wavelengths_blue = ops.vactoair(data['wavelengths_blue'])
 
-    # Concatenate the red and blue flux arrays along the third dimension to create a 3D array
+    berv_red = data['brv_red']
+    berv_blue = data['brv_blue']
+
+    # Taking the median between the berv estimates
+    berv = np.median([berv_red,berv_blue],axis=0)/1000
+
+    # Determine the number of pixels for red and blue
+    num_pixels_red = wavelengths_red.shape[0]
+    num_pixels_blue = wavelengths_blue.shape[0]
+    length_difference = num_pixels_red - num_pixels_blue
+
+    # Initialize expanded blue wavelength and flux arrays
+    expanded_wavelengths_blue = np.zeros((num_pixels_red, wavelengths_blue.shape[1]))
+    padded_flux_blue = np.zeros((num_pixels_red, flux_blue.shape[1], flux_blue.shape[2]))
+
+    # Insert NaNs for the first 'length_difference' elements in blue orders
+    expanded_wavelengths_blue[:length_difference, :] = np.nan
+    padded_flux_blue[:length_difference, :, :] = np.nan
+
+    # Expand blue wavelengths for each order
+    for i in range(wavelengths_blue.shape[1]):
+        order_wavelengths = wavelengths_blue[:, i]
+
+        # Keep original wavelengths
+        expanded_wavelengths_blue[length_difference:, i] = order_wavelengths
+
+        # Pad flux with NaN for the expanded part
+        padded_flux_blue[length_difference:, :, i] = flux_blue[:, :, i]
+
+    # Concatenate red and blue arrays
+    stacked_wavelengths = np.hstack((wavelengths_red, expanded_wavelengths_blue))
     stacked_flux = np.concatenate((flux_red, padded_flux_blue), axis=2)
-
-    # Correcting the function to extrapolate the blue wavelengths
-    def extrapolate_wavelength_order_spline(wavelengths, target_length):
-        # Creating an array to store the extrapolated wavelengths for each order
-        extrapolated_wavelengths = np.zeros((target_length, wavelengths.shape[1]))
-
-        # Extrapolating each order using polynomial spline
-        for i in range(wavelengths.shape[1]):
-            order_wavelengths = wavelengths[:, i]
-            x_values = np.arange(len(order_wavelengths))
-            spline = UnivariateSpline(x_values, order_wavelengths, k=3, s=0)
-            new_x_values = np.linspace(0, len(order_wavelengths) - 1, target_length)
-            extrapolated_wavelengths[:, i] = spline(new_x_values)
-
-        return extrapolated_wavelengths
-
-    # Extrapolate blue wavelengths to have the same number of wavelength values as the red wavelengths
-    padded_wavelengths_blue = extrapolate_wavelength_order_spline(wavelengths_blue, wavelengths_red.shape[0])
-
-    # Concatenate the red and blue wavelength arrays along the second dimension to create a 2D array
-    stacked_wavelengths = np.concatenate((wavelengths_red, padded_wavelengths_blue), axis=1)
 
     # Reshape the 2D stacked wavelength array into a 3D array
     reshaped_wavelengths = stacked_wavelengths[:, :, np.newaxis]
@@ -1663,21 +1688,20 @@ def read_maroonx(inpath,filelist,construct_s1d=False):
     # Replicate the 3D wavelength array across the third dimension to match the shape of the stacked flux array
     stacked_wavelengths_3d = np.tile(reshaped_wavelengths, (1, 1, stacked_flux.shape[1]))
     wave = stacked_wavelengths_3d
-    wave = list(wave)
 
-    # Transposing the stacked flux array to have the shape (59, 61, 4036)
+    # Transposing the stacked flux array to have the exposures as the first dimension of the array
     transposed_stacked_flux = np.transpose(stacked_flux, (1, 2, 0))
     e2ds = transposed_stacked_flux
 
-    # Transposing the final stacked wavelengths 3D array to have the shape (59, 61, 4036)
+    # Transposing the final stacked wavelengths 3D array to have the exposures as the first dimension of the array
     transposed_stacked_wavelengths_3d = np.transpose(stacked_wavelengths_3d, (2, 1, 0))
     wave = transposed_stacked_wavelengths_3d
-    wave = list(wave)
+    wave = wave[:, ::-1, :]
+    wave = wave[:, :, ::-1]
 
     e2ds = transposed_stacked_flux
-    e2ds = list(e2ds)
-
-    # pdb.set_trace()
+    e2ds = e2ds[:, ::-1, :]
+    e2ds = e2ds[:, :, ::-1]
 
     # Creating the date values
     dates = np.datetime_as_string(data['time'])
@@ -1688,13 +1712,11 @@ def read_maroonx(inpath,filelist,construct_s1d=False):
     t = Time(dates, format='isot', scale='utc')
     mjds = t.mjd
     mjd = mjds
-    # mjd = list(mjd)
 
     # Estimating the exposure times based on the time difference between succesive measurements, and using median
     exp_time = np.median(np.round((np.diff(mjds) * 24 * 60 * 60), 0))  # Converting to seconds
     exp_times = np.array(len(mjds) * [exp_time])
     texp = exp_times
-    # texp = list(texp)
 
     # Simulating header names for science
     obstype = np.array(len(dates) * ["SCIENCE"])
@@ -1706,7 +1728,6 @@ def read_maroonx(inpath,filelist,construct_s1d=False):
 
     # Number of exposures
     num_exposures = len(dates) * [len(dates)]
-    num_exposures = list(num_exposures)
 
     # Creating a suffix array with values from _1 to _59
     suffixes = np.arange(1, len(dates) + 1)
@@ -1717,65 +1738,18 @@ def read_maroonx(inpath,filelist,construct_s1d=False):
     # Extracting the number of pixels
     data_shape = transposed_stacked_flux.shape
     npx = np.array(len(dates) * [data_shape[2]])
-    # npx = list(npx)
 
     # Extracting the number of orders
     data_shape = transposed_stacked_flux.shape
     norders = np.array(len(dates) * [data_shape[1]])
-    # norders = list(norders)
 
-    #Calculating berv
-    latitude = 19.8238
-    longitude = -155.4689
-    height = 2700
-
-    def extract_ra_dec(file_path):
-        ra = None
-        dec = None
-
-        with open(file_path, 'r') as file:
-            for line in file:
-                line = line.strip()
-                parts = line.split()
-                if len(parts) >= 2:
-                    key = parts[0].strip()
-                    value = parts[1].strip()
-                    if key == 'RA':
-                        ra = value
-                    elif key == 'DEC':
-                        dec = value
-
-                if ra and dec:
-                    break
-
-        return ra, dec
-
-    config_path = "data/"+data_file+"/config"
-
-    ra, dec = extract_ra_dec("data/"+data_file+"/config")
-    #pdb.set_trace()
-
-    bervs = []
-    gammas = []
-    for i in range(0,len(mjds)):
-        berv_i = sp.calculateberv(mjds[i],[latitude,longitude,height],ra,dec,mode="MAROON-X")
-        gamma_i = (1.0 + (berv_i * u.km / u.s / const.c).decompose().value)
-        bervs.append(berv_i)
-        gammas.append(gamma_i)
-
-    berv = np.array(bervs)
-
+    #Extracting the airmass
     airmass = data['airmass']
 
+    #The variable header is no longer used so we can just pass it as an empty list
     header = []
 
-    #gamma=1
-    wave = np.array(wave)*np.array(gammas).reshape(59,1,1)
-    wave = ops.vactoair(wave)
-    wave = list(wave)
-    #wave.append(np.array(collected_waves * gamma) / 10)
-
-    output = {'wave': wave, 'e2ds': e2ds,
+    output = {'wave': list(wave), 'e2ds': list(e2ds),
               'mjd': mjd, 'date': date, 'texp': texp, 'obstype': obstype, 'framename': framename, 'npx': npx,
               'norders': norders, 'berv': berv, 'airmass': airmass, 'header': header}
 

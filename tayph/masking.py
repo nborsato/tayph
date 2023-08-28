@@ -287,6 +287,10 @@ class mask_maker(object):
         self.ax[1].set_title('Residual of time-average')
         self.ax[2].set_title('Time average 1D spectrum')
 
+        self.multi = MultiCursor(self.fig.canvas, (self.ax[0],self.ax[1],self.ax[2]), color='g',
+        lw=1, horizOn=False, vertOn=True)
+        self.multi.set_active(False)#The selection cursor starts deactivated as well, and is
+
         array1 = copy.deepcopy(self.order)
         array2 = copy.deepcopy(self.residual)
         array1[np.isnan(array1)] = np.inf#The CB doesn't eat NaNs - set them to inf for the plot.
@@ -321,9 +325,7 @@ class mask_maker(object):
         #When initializing, none are plotted. However when proceeding through draw_masked_areas
         #below, this variable could become populated if previously selected column were loaded
         #from file.
-        self.multi = MultiCursor(self.fig.canvas, (self.ax[0],self.ax[1],self.ax[2]), color='g',
-        lw=1, horizOn=False, vertOn=True)
-        self.multi.set_active(False)#The selection cursor starts deactivated as well, and is
+
         #activated and deactivated further down as the buttons are pressed.
         self.apply_to_all = False
         self.apply_to_all_future = False

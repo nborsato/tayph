@@ -1758,8 +1758,6 @@ config=False,save_figure=True,skysub=False,rawpath=None,nod='both'):
                     str(np.round(airmass[sorting[j]],3))+'\t'+str(np.round(berv[sorting[j]],5))+'\t'
                     +framename[sorting[j]]+'\n')
                 f.write(line)
-
-
         if mode in ['UVES-red','UVES-blue','ESPRESSO']:#UVES and ESPRESSO pipelines pad with zeroes.
             #We remove these.
             # order[np.abs(order)<1e-10*np.nanmedian(order)]=0.0#First set very small values to zero.
@@ -1784,12 +1782,16 @@ config=False,save_figure=True,skysub=False,rawpath=None,nod='both'):
         if np.allclose(wave_order,first_wl,rtol=2e-8):#If the wavelenght differences are smaller
         #than 1 in 50,000,000, i.e. R = 50 million, i.e delta-v = 6 m/s. Quite stringent here.
             n_1d+=1
-            wave_order = wave_order[0]
+            #wave_order = wave_order[0]
+            #pdb.set_trace()
 
-
+        if mode in ['MAROON-X']:
+            fits.writeto(outpath / ('wave_' + str(i) + '.fits'), wave_order, overwrite=True)
+        else:
+            fits.writeto(outpath / ('wave_' + str(i) + '.fits'), wave_order, overwrite=True)
 
         fits.writeto(outpath/('order_'+str(i)+'.fits'),order,overwrite=True)
-        fits.writeto(outpath/('wave_'+str(i)+'.fits'),wave_order,overwrite=True)
+
 
     f.close()
     if n_1d > 0 and n_1d != norders:
@@ -2177,11 +2179,11 @@ def measure_RV(dp,instrument='HARPS',star='solar',save_figure=True,air=True,air1
                 else:
                     w_i = list_of_waves[i]
                     o_i = list_of_orders[i]
-                try:
-                    w_trimmed,o_trimmed,r1,r2=ops.clean_block(w_i,o_i,w=filter_width,deg=4,renorm=True,
-                    parallel=False)#SET PARALLEL TO FALSE BECAUSE WE MAY ALREDY BE IN PARALLEL
-                except:
-                    pdb.set_trace()
+                #try:
+                w_trimmed,o_trimmed,r1,r2=ops.clean_block(w_i,o_i,w=filter_width,deg=4,renorm=True,
+                parallel=False)#SET PARALLEL TO FALSE BECAUSE WE MAY ALREDY BE IN PARALLEL
+                #except:
+                #   pdb.set_trace()
                 if not parallel: ut.statusbar(i,len(list_of_orders))
                 return(w_trimmed,o_trimmed,r2)
 
@@ -2201,38 +2203,38 @@ def measure_RV(dp,instrument='HARPS',star='solar',save_figure=True,air=True,air1
         # ut.end(t2)
         # pdb.set_trace()
 
-        if parallel:
-            try:
-                with Parallel(n_jobs=ncores,backend='loky') as P:
-                    list_of_waves_trimmed, list_of_orders_trimmed, list_of_residuals = zip(
-                    *P(delayed(clean_order)(i) for i in range(len(list_of_orders))))
-            except:
-                print('------Warning: Joblib triggered an error. Changing backend to threading.')
-                #On my 8-core laptop, this yields only a 25% speedup compared to serial.
-                #Under normal circumstances however, the loky backend will fare well, though.
-                try:
-                    with suppress(OSError, AttributeError):#This here is needed to flush out an OSError
-                    #that is triggered by the failure of the loky backend above. I spawn a Parallel
-                    #object that I let do nothing, supressing the error. Then the computation can
-                    #continue with a new series of Parallel objects with the threading backend.
-                    #This is a bit hacky, but hey...
-                        with Parallel(n_jobs=ncores) as P:
-                            a=P(delayed(void)(i) for i in range(len(list_of_orders)))
-                    with Parallel(n_jobs=ncores,backend="threading") as P:
-                        list_of_waves_trimmed, list_of_orders_trimmed, list_of_residuals = zip(
-                        *P(delayed(clean_order)(i) for i in range(len(list_of_orders))))
-                    print("------If you see an OSError here but the code keeps going, hang in there.")
-                except:
-                    print('------Warning: Unable to dislodge joblib by changing backend. Continuing '
-                    'this computation in serial.')
-                    with suppress(OSError, AttributeError):#I flush it again if there was a second fail.
-                        with Parallel(n_jobs=ncores) as P:
-                            a=P(delayed(void)(i) for i in range(len(list_of_orders)))
-                    list_of_waves_trimmed, list_of_orders_trimmed, list_of_residuals = zip(
-                    *[clean_order(i) for i in range(len(list_of_orders))])
-        else:
-            list_of_waves_trimmed, list_of_orders_trimmed, list_of_residuals = zip(
-            *[clean_order(i) for i in range(len(list_of_orders))])
+        # if parallel:
+        #     try:
+        #         with Parallel(n_jobs=ncores,backend='loky') as P:
+        #             list_of_waves_trimmed, list_of_orders_trimmed, list_of_residuals = zip(
+        #             *P(delayed(clean_order)(i) for i in range(len(list_of_orders))))
+        #     except:
+        #         print('------Warning: Joblib triggered an error. Changing backend to threading.')
+        #         #On my 8-core laptop, this yields only a 25% speedup compared to serial.
+        #         #Under normal circumstances however, the loky backend will fare well, though.
+        #         try:
+        #             with suppress(OSError, AttributeError):#This here is needed to flush out an OSError
+        #             #that is triggered by the failure of the loky backend above. I spawn a Parallel
+        #             #object that I let do nothing, supressing the error. Then the computation can
+        #             #continue with a new series of Parallel objects with the threading backend.
+        #             #This is a bit hacky, but hey...
+        #                 with Parallel(n_jobs=ncores) as P:
+        #                     a=P(delayed(void)(i) for i in range(len(list_of_orders)))
+        #             with Parallel(n_jobs=ncores,backend="threading") as P:
+        #                 list_of_waves_trimmed, list_of_orders_trimmed, list_of_residuals = zip(
+        #                 *P(delayed(clean_order)(i) for i in range(len(list_of_orders))))
+        #             print("------If you see an OSError here but the code keeps going, hang in there.")
+        #         except:
+        #             print('------Warning: Unable to dislodge joblib by changing backend. Continuing '
+        #             'this computation in serial.')
+        #             with suppress(OSError, AttributeError):#I flush it again if there was a second fail.
+        #                 with Parallel(n_jobs=ncores) as P:
+        #                     a=P(delayed(void)(i) for i in range(len(list_of_orders)))
+        #             list_of_waves_trimmed, list_of_orders_trimmed, list_of_residuals = zip(
+        #             *[clean_order(i) for i in range(len(list_of_orders))])
+        #else:
+        list_of_waves_trimmed, list_of_orders_trimmed, list_of_residuals = zip(
+        *[clean_order(i) for i in range(len(list_of_orders))])
         #Done calling 2D order cleaning in parallel...
 
         print(f"---Interpolating over NaN's")
@@ -2242,6 +2244,7 @@ def measure_RV(dp,instrument='HARPS',star='solar',save_figure=True,air=True,air1
 
 
     def fit_ccf(rv,ccfs,mode='star',parallel=parallel,degree=2):
+        from tqdm import tqdm
         if mode.lower() == 'star':
             def fit_stellar(i):
                 spec = i/np.nanmean(i)
@@ -2258,7 +2261,7 @@ def measure_RV(dp,instrument='HARPS',star='solar',save_figure=True,air=True,air1
                 # ut.end(t1)
             else:
                 # t2=ut.start()
-                centroids, vsini, E2d, fit = zip(*[fit_stellar(i) for i in ccfs])
+                centroids, vsini, E2d, fit = zip(*[fit_stellar(i) for i in tqdm(ccfs)])
                 # ut.end(t2)
             return(centroids,vsini,E2d,fit)
         if mode.lower() == 'tel' or mode.lower() == 'telluric' or mode.lower() == 'tellurics':
@@ -2769,15 +2772,16 @@ def measure_RV(dp,instrument='HARPS',star='solar',save_figure=True,air=True,air1
                 ut.tprint('---Proceeding with 2D wavelength correction.')
                 plt.close('all')
         def close(self,event):
+            plt.close('all')
             if self.fit_done > 0:
                 print(f'---Saving to {dp}')
                 for i in range(len(self.list_of_waves)):
-                    fits.writeto(dp/('wave_'+str(i)+'.fits'),self.list_of_waves[i],overwrite=True)
+                    fits.writeto(dp/('/wave_'+str(i)+'.fits'),self.list_of_waves[i],overwrite=True)
                 if read_s1d:
                     with open(dp/'s1ds.pkl', 'wb') as f: pickle.dump([s1dhdr_sorted,s1d_sorted,self.wave1d_sorted],f)
             else:
                 print('---Accepting wavelength solutions without re-alignment')
-            plt.close('all')
+            #plt.close('all')
 
             print('---Exiting')
 
@@ -2915,12 +2919,12 @@ def measure_RV(dp,instrument='HARPS',star='solar',save_figure=True,air=True,air1
 
     plt.show()
 
-    plt.plot(callback.Gw)
-    plt.show()
+    #plt.plot(callback.Gw)
+    #plt.show()
 
-    plt.plot(callback.Lw)
-    plt.show()
-    pdb.set_trace()
+    #plt.plot(callback.Lw)
+    #plt.show()
+    #pdb.set_trace()
     sys.exit()
 
 

@@ -630,7 +630,7 @@ def running_MAD_2D(z,w,verbose=False,parallel=False):
 
     typetest(z,np.ndarray,'z in fun.running_MAD_2D()')
     dimtest(z,[0,0],'z in fun.running_MAD_2D()')
-    typetest(w,[int,float,numpy.int64],'w in fun.running_MAD_2D()')
+    typetest(w,[int,float,numpy.int64,numpy.int32],'w in fun.running_MAD_2D()')
     postest(w,'w in fun.running_MAD_2D()')
     size = np.shape(z)
     ny = size[0]
