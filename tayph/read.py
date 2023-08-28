@@ -1775,8 +1775,19 @@ def read_maroonx(inpath,filelist,construct_s1d=False):
     wave = list(wave)
     #wave.append(np.array(collected_waves * gamma) / 10)
 
-    output = {'wave': wave, 'e2ds': e2ds,
-              'mjd': mjd, 'date': date, 'texp': texp, 'obstype': obstype, 'framename': framename, 'npx': npx,
-              'norders': norders, 'berv': berv, 'airmass': airmass, 'header': header}
+    wave1d = []
+    s1d = []
+    s1dhdr = []
+    s1dmjd = []
+
+    if construct_s1d:
+        output = {'wave': wave, 'e2ds': e2ds, 'header': header, 'wave1d': wave1d, 's1d': s1d, 's1dhdr': s1dhdr,
+                  'mjd': mjd, 'date': date, 'texp': texp, 'obstype': obstype, 'framename': framename, 'npx': npx,
+                  'norders': norders, 'berv': berv, 'airmass': airmass, 's1dmjd': s1dmjd}
+
+    else:
+        output = {'wave': wave, 'e2ds': e2ds,
+                  'mjd': mjd, 'date': date, 'texp': texp, 'obstype': obstype, 'framename': framename, 'npx': npx,
+                  'norders': norders, 'berv': berv, 'airmass': airmass, 'header': header}
 
     return output
