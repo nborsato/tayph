@@ -282,8 +282,8 @@ class mask_maker(object):
         plt.subplots_adjust(left=0.05)#Make them more tight, we need all the space we can get.
         plt.subplots_adjust(right=0.75)
 
-        self.ax[0].set_title(f'Spectral order {self.N}  ({round(np.min(self.wl),1)} - '
-        f'{round(np.max(self.wl),1)} nm)')
+        self.ax[0].set_title(f'Spectral order {self.N}  ({round(np.nanmin(self.wl),1)} - '
+        f'{round(np.nanmax(self.wl),1)} nm)')
         self.ax[1].set_title('Residual of time-average')
         self.ax[2].set_title('Time average 1D spectrum')
 
@@ -782,7 +782,7 @@ class mask_maker(object):
             if self.list_of_1D_telluric_spectra:
                 self.img4[0].set_ydata(self.telluric1d*0.9*self.img_max)
                 self.img5[0].set_ydata(self.telluric1d*0.0+0.9*self.img_max*self.tcut)
-        self.ax[0].set_title(f'Spectral order {self.N}  ({round(np.min(self.wl),1)} - {round(np.max(self.wl),1)} nm)')
+        self.ax[0].set_title(f'Spectral order {self.N}  ({round(np.nanmin(self.wl),1)} - {round(np.nanmax(self.wl),1)} nm)')
         self.ax[2].set_ylim(0,self.img_max)
         self.draw_masked_areas()
         self.fig.canvas.draw_idle()
