@@ -10,7 +10,11 @@ __all__ = [
     "blur_rotate",
     "airtovac",
     "vactoair",
-    "clean_block"
+    "clean_block",
+    "blaze_model",
+    "make_same_shape",
+    "average_overlapping_regions",
+    "spec_stich_n_norm"
 ]
 
 import numpy as np
@@ -1010,3 +1014,166 @@ def clean_block(wl,block,deg=0,w=200,nsigma=5.0,verbose=False,renorm=True,parall
         return(wl_trimmed,np.transpose(np.transpose(block)*avg_flux),r,r2)#Avg_flux is 1.0 unless
         #renorm=True.
     return(wl_trimmed,np.transpose(np.transpose(block)*avg_flux),r)
+
+def blaze_model(blaze,sdev=3,window=300):
+    """Applies running average fit of the blaze order data.
+        args:
+            blaze: the average escelle blaze data
+            sdev: stanrard deviation cutoff
+
+        returns:
+            a: the mean blaze model
+    """
+
+    def nan_helper(data): #Function which allows interpolation though nans
+        return lambda z: z.nonzero()[0]
+
+    blaze = blaze.copy()
+    data = blaze.copy()
+
+    nan_mask = np.isnan(blaze)
+    no_nan = nan_helper(blaze)
+
+    #This will re-create the dataset but will interpolate though the nans giving it a place holder average value
+    blaze[nan_mask]= np.interp(no_nan(nan_mask), no_nan(~nan_mask), blaze[~nan_mask], period = 1)
+
+    a = uniform_filter1d(blaze,size=window,mode="nearest")#Applies moving averages on data
+
+    #Takes difference the replaces datavalues which fall less 3 std of mean trend with mean
+    diff = blaze - a
+    cleaned_blaze_1 = blaze
+    cleaned_blaze_1[diff<-sdev*np.std(diff)] = a[diff<-sdev*np.std(diff)]
+
+    #Repeats process on the new data but masks out datavalues which fall outside 3std in both directions
+    a = uniform_filter1d(cleaned_blaze_1,size=window,mode="nearest")
+    diff = blaze - a
+    cleaned_blaze_2 = cleaned_blaze_1
+    cleaned_blaze_2[np.absolute(diff)>sdev*np.std(diff)] = a[np.absolute(diff)>sdev*np.std(diff)]
+    a = uniform_filter1d(cleaned_blaze_1,size=window,mode="nearest")
+
+    #Replace all positions that contanined nan values initially with nans again
+    a[np.isnan(data)] = data[np.isnan(data)]
+
+    return a
+
+def make_same_shape(arr1, arr2):
+    """
+    Make two arrays the same shape by padding with nan values.
+
+    Parameters:
+        arr1, arr2: Input 1D arrays
+
+    Returns:
+        new_arr1, new_arr2: Padded arrays
+    """
+    max_len = max(len(arr1), len(arr2))
+
+    new_arr1 = np.empty(max_len)
+    new_arr1[:] = np.nan
+    new_arr1[:len(arr1)] = arr1
+
+    new_arr2 = np.empty(max_len)
+    new_arr2[:] = np.nan
+    new_arr2[:len(arr2)] = arr2
+
+    return new_arr1, new_arr2
+
+
+def average_overlapping_regions(wave_blue, spec_blue, wave_red, spec_red):
+    from scipy.interpolate import interp1d
+    import numpy as np
+    # Step 1: Create a new wavelength axis that spans the min to max of both arrays
+    min_wave = min(np.nanmin(wave_blue), np.nanmin(wave_red))
+    max_wave = max(np.nanmax(wave_blue), np.nanmax(wave_red))
+    new_wave_axis = np.linspace(min_wave, max_wave, num=max(len(wave_blue), len(wave_red)))
+
+    # Step 2: Interpolate the spectra onto this new wavelength axis
+    interp_blue = interp1d(wave_blue, spec_blue, bounds_error=False, fill_value=np.nan)
+    interp_red = interp1d(wave_red, spec_red, bounds_error=False, fill_value=np.nan)
+
+    new_spec_blue = interp_blue(new_wave_axis)
+    new_spec_red = interp_red(new_wave_axis)
+
+    # Step 3: Take an average of the spectra where they overlap
+    # Note: np.nanmean treats nans as 'missing' and ignores them in the averaging
+    new_spec_avg = np.nanmean(np.array([new_spec_blue, new_spec_red]), axis=0)
+
+    return new_wave_axis, new_spec_avg
+
+def spec_stich_n_norm(spec, wave, cont, sig):
+    """This stitches and continuum normalises CARMENES E2DS spectra into 1D spectra for use in
+    molecfit.
+    N. Borsato - 24-02-2021"""
+
+    import numpy as np
+    from astropy.io import fits
+    from scipy.interpolate import interp1d
+
+    #These arrays will be filled with the stiched data.
+    Total_Specs = np.array([])
+    Total_Waves = np.array([])
+    Total_Cont = np.array([])
+
+    step_size = np.diff(wave)
+    step_size = np.min(step_size[step_size>0])/2
+
+    for i in range(len(spec)-1):
+
+        waves = np.linspace(np.min(wave[i]), np.max(wave[i+1]), 4*wave[i:i+1].size) #Specifiying wavelength grid
+
+        #Interpolating the spectral orders to the new grid for both the current and proceeding order
+        I_spectra_1 = interp1d(wave[i], spec[i], bounds_error = False) #Intep for spectra
+        I_spectra_2 = interp1d(wave[i+1], spec[i+1], bounds_error = False)
+
+        I_sig_1 = interp1d(wave[i], sig[i], bounds_error = False) #Interp for sig vals
+        I_sig_2 = interp1d(wave[i+1], sig[i+1], bounds_error = False)
+
+        I_cont_1 = interp1d(wave[i], cont[i], bounds_error = False) #Interp for continuum vals
+        I_cont_2 = interp1d(wave[i+1], cont[i+1], bounds_error = False)
+
+        #Using interpolator to create a vecotr of the same length for both orders.
+        ## Note: If the order doesn't span the wavelength range it creates a nan
+        I_spectra_1 = I_spectra_1(waves)
+        I_spectra_2 = I_spectra_2(waves)
+
+        I_sig_1 = I_sig_1(waves)
+        I_sig_2 = I_sig_2(waves)
+
+        I_cont_1 = I_cont_1(waves)
+        I_cont_2 = I_cont_2(waves)
+
+        #If a nan value is present, replace the value with the corresponding value of the other interpolated vecotor
+        ## This creates an overlapping vecotr of the same value, which means you can take an average and get the same value
+        I_spectra_1 = np.nan_to_num(I_spectra_1, nan = I_spectra_2)
+        I_spectra_2 = np.nan_to_num(I_spectra_2, nan = I_spectra_1)
+
+        I_sig_1 = np.nan_to_num(I_sig_1, nan = I_sig_2)
+        I_sig_2 = np.nan_to_num(I_sig_2, nan = I_sig_1)
+
+        I_cont_1 = np.nan_to_num(I_cont_1, nan = I_cont_2)
+        I_cont_2 = np.nan_to_num(I_cont_2, nan = I_cont_1)
+
+        Spec_Combo = np.array([I_spectra_1, I_spectra_2]) #Combing spectra as 2d array
+        Spec_Combo = Spec_Combo.T #Take transpose to pair the data values
+
+        #Do the same for the sig values and continuum
+        Sig_Combo = np.array([I_sig_1, I_sig_2])
+        Sig_Combo = Sig_Combo.T
+
+        Cont_Combo = np.array([I_cont_1, I_cont_2])
+        Cont_Combo = Cont_Combo.T
+
+        #Money is made here, a weighted average is taken using the sig values than normalise by dividing by the continuu,
+        Ave_Spec = np.average(Spec_Combo, weights = 1/(Sig_Combo**2), axis = 1)/np.average(Cont_Combo, axis = 1)
+        Ave_Spec = Ave_Spec.T
+
+        #Averages are append with their corresponding wavlength
+        Total_Specs = np.append(Total_Specs, Ave_Spec)
+        Total_Waves = np.append(Total_Waves, waves)
+        #Total_Cont = np.append(Total_Cont, np.average(Cont_Combo, axis = 1))
+
+    #Reaorder values to a new grid to create the final stiched spectra
+    waves = np.arange(np.min(Total_Waves), np.max(Total_Waves), step_size)
+    I_T_Spectra = interp1d(Total_Waves, Total_Specs)
+
+    return waves, I_T_Spectra(waves) #returns wavelength grid and the normalised flux values
