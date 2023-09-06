@@ -337,7 +337,7 @@ def spec_stich_n_norm(spec, wave, cont, sig):
 
     return waves, I_T_Spectra(waves) #returns wavelength grid and the normalised flux values
 
-def blaze_model(blaze,sdev=3):
+def blaze_model(blaze,sdev=3,window=300):
     """Applies running average fit of the blaze order data.
         args:
             blaze: the average escelle blaze data
@@ -359,7 +359,7 @@ def blaze_model(blaze,sdev=3):
     #This will re-create the dataset but will interpolate though the nans giving it a place holder average value
     blaze[nan_mask]= np.interp(no_nan(nan_mask), no_nan(~nan_mask), blaze[~nan_mask], period = 1)
 
-    a = uniform_filter1d(blaze,size=300,mode="nearest")#Applies moving averages on data
+    a = uniform_filter1d(blaze,size=window,mode="nearest")#Applies moving averages on data
 
     #Takes difference the replaces datavalues which fall less 3 std of mean trend with mean
     diff = blaze - a
@@ -367,11 +367,11 @@ def blaze_model(blaze,sdev=3):
     cleaned_blaze_1[diff<-sdev*np.std(diff)] = a[diff<-sdev*np.std(diff)]
 
     #Repeats process on the new data but masks out datavalues which fall outside 3std in both directions
-    a = uniform_filter1d(cleaned_blaze_1,size=300,mode="nearest")
+    a = uniform_filter1d(cleaned_blaze_1,size=window,mode="nearest")
     diff = blaze - a
     cleaned_blaze_2 = cleaned_blaze_1
     cleaned_blaze_2[np.absolute(diff)>sdev*np.std(diff)] = a[np.absolute(diff)>sdev*np.std(diff)]
-    a = uniform_filter1d(cleaned_blaze_1,size=300,mode="nearest")
+    a = uniform_filter1d(cleaned_blaze_1,size=window,mode="nearest")
 
     #Replace all positions that contanined nan values initially with nans again
     a[np.isnan(data)] = data[np.isnan(data)]
@@ -1611,7 +1611,52 @@ def read_foces(inpath,filelist,mode,construct_s1d=True):
 
     return (output)
 
-def read_maroonx(inpath,filelist,construct_s1d=False):
+
+def make_same_shape(arr1, arr2):
+    """
+    Make two arrays the same shape by padding with nan values.
+
+    Parameters:
+        arr1, arr2: Input 1D arrays
+
+    Returns:
+        new_arr1, new_arr2: Padded arrays
+    """
+    max_len = max(len(arr1), len(arr2))
+
+    new_arr1 = np.empty(max_len)
+    new_arr1[:] = np.nan
+    new_arr1[:len(arr1)] = arr1
+
+    new_arr2 = np.empty(max_len)
+    new_arr2[:] = np.nan
+    new_arr2[:len(arr2)] = arr2
+
+    return new_arr1, new_arr2
+
+
+def average_overlapping_regions(wave_blue, spec_blue, wave_red, spec_red):
+    from scipy.interpolate import interp1d
+    import numpy as np
+    # Step 1: Create a new wavelength axis that spans the min to max of both arrays
+    min_wave = min(np.nanmin(wave_blue), np.nanmin(wave_red))
+    max_wave = max(np.nanmax(wave_blue), np.nanmax(wave_red))
+    new_wave_axis = np.linspace(min_wave, max_wave, num=max(len(wave_blue), len(wave_red)))
+
+    # Step 2: Interpolate the spectra onto this new wavelength axis
+    interp_blue = interp1d(wave_blue, spec_blue, bounds_error=False, fill_value=np.nan)
+    interp_red = interp1d(wave_red, spec_red, bounds_error=False, fill_value=np.nan)
+
+    new_spec_blue = interp_blue(new_wave_axis)
+    new_spec_red = interp_red(new_wave_axis)
+
+    # Step 3: Take an average of the spectra where they overlap
+    # Note: np.nanmean treats nans as 'missing' and ignores them in the averaging
+    new_spec_avg = np.nanmean(np.array([new_spec_blue, new_spec_red]), axis=0)
+
+    return new_wave_axis, new_spec_avg
+
+def read_maroonx(inpath,filelist,construct_s1d=True):
     """
     This is a working read function for the Maroon-X spectrograph. It processes the reduced 2D echelle spectra, which
     are formatted as an .npz file, reads the relevant information, and constructs the files in a way that Tayph can
@@ -1633,8 +1678,50 @@ def read_maroonx(inpath,filelist,construct_s1d=False):
     import numpy as np
     import matplotlib.pyplot as plt
     from astropy.time import Time
-    from scipy.interpolate import UnivariateSpline
 
+    def process_channel_data_unified(data, channel):
+        """
+        Process the channel data ('blue' or 'red') to produce 1D spectra.
+
+        Parameters:
+            data (dict): The data dictionary containing flux, wavelengths, and variance for each channel.
+            channel (str): The channel ('blue' or 'red') to be processed.
+            blaze_model (function): The function to calculate the blaze model.
+            spec_stich_n_norm (function): The function to stich and normalize the spectrum.
+            adaptive_mad_filter_func (function): The function to apply adaptive MAD filtering.
+
+        Returns:
+            wave_1d (numpy array): The 1D wavelength array.
+            spec_1d (numpy array): The 1D spectrum array.
+        """
+
+        # Extracting the flux and wavelength data for the channel
+        flux = data[f'flux_{channel}']
+        flux = np.transpose(flux, (1, 2, 0))
+        flux = flux[0]
+        flux = flux[::-1, :]
+
+        wavelengths = data[f'wavelengths_{channel}']
+        wavelengths = wavelengths.T
+        wavelengths = wavelengths[::-1, :]
+
+        var = data[f'f_var_{channel}']
+        var = np.transpose(var, (1, 2, 0))
+        var = var[0]
+        var = var[::-1, :]
+        std = np.sqrt(var)
+        std = std / np.sum(std)
+
+        # Applying blaze model and normalisation
+        blaze = blaze_model(flux)
+        normalised_spec = flux / blaze
+        normalised_spec = normalised_spec / blaze_model(normalised_spec, window=25)
+        ones_array = np.ones_like(flux)
+
+        # Stiching and normalising the 1D spectrum
+        wave_1d, spec_1d = spec_stich_n_norm(normalised_spec, wavelengths, ones_array, std)
+
+        return wave_1d, spec_1d
     # Load the data
 
     inpath = inpath.as_posix()
@@ -1655,6 +1742,15 @@ def read_maroonx(inpath,filelist,construct_s1d=False):
     # Taking the median between the berv estimates
     berv = np.median([berv_red,berv_blue],axis=0)/1000
 
+    if construct_s1d=="MAROON-X":
+
+        #Computer the 1D Spectrum
+        wave_1d_blue, spec_1d_blue = process_channel_data_unified(data, 'blue')
+        wave_1d_red, spec_1d_red = process_channel_data_unified(data, 'red')
+        new_wave_1d_blue, new_wave_1d_red = make_same_shape(wave_1d_blue, wave_1d_red)
+        new_spec_1d_blue, new_spec_1d_red = make_same_shape(spec_1d_blue, spec_1d_red)
+        wave_1d, spec_1d = average_overlapping_regions(new_wave_1d_blue, new_spec_1d_blue, new_wave_1d_red, new_spec_1d_red)
+
     # Determine the number of pixels for red and blue
     num_pixels_red = wavelengths_red.shape[0]
     num_pixels_blue = wavelengths_blue.shape[0]
@@ -1668,15 +1764,15 @@ def read_maroonx(inpath,filelist,construct_s1d=False):
     expanded_wavelengths_blue[:length_difference, :] = np.nan
     padded_flux_blue[:length_difference, :, :] = np.nan
 
-    # Expand blue wavelengths for each order
-    for i in range(wavelengths_blue.shape[1]):
-        order_wavelengths = wavelengths_blue[:, i]
+    # Set the first 'length_difference' elements in blue orders to NaN
+    expanded_wavelengths_blue[:length_difference, :] = np.nan
+    padded_flux_blue[:length_difference, :, :] = np.nan
 
-        # Keep original wavelengths
-        expanded_wavelengths_blue[length_difference:, i] = order_wavelengths
+    # Vectorised version to expand blue wavelengths for all orders
+    expanded_wavelengths_blue[length_difference:, :] = wavelengths_blue[:, :]
 
-        # Pad flux with NaN for the expanded part
-        padded_flux_blue[length_difference:, :, i] = flux_blue[:, :, i]
+    # Vectorised version to pad flux with NaN for the expanded part
+    padded_flux_blue[length_difference:, :, :] = flux_blue[:, :, :]
 
     # Concatenate red and blue arrays
     stacked_wavelengths = np.hstack((wavelengths_red, expanded_wavelengths_blue))
