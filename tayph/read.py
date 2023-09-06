@@ -1577,6 +1577,7 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
 
             # Stiching and normalising the 1D spectrum
             wave_1d, spec_1d = spec_stich_n_norm(normalised_spec, wavelengths_i, ones_array, std)
+            wave_1d = wave_1d*10
             wave_1ds.append(wave_1d)
             spec_1ds.append(spec_1d)
 
