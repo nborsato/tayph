@@ -1720,6 +1720,7 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
         s1dhdr = fits.Header()
         dat = date[i]
         s1dhdr['MJD'] = mjd[i]
+        s1dhdr['DATE-OBS'] = dates[i]
         zpt = Time(Time(int(Time(dat).mjd), format='mjd').isot)
         t = Time(dat, format='isot', scale='utc')
         s1dhdr['DATE-OBS-S'] = (abs(zpt - t)).to_value('sec')
