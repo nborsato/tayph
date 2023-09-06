@@ -1515,6 +1515,7 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
     import numpy as np
     import matplotlib.pyplot as plt
     from astropy.time import Time
+    from tqdm import tqdm
 
     def process_channel_data_unified(data, channel):
         """
@@ -1535,30 +1536,41 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
         # Extracting the flux and wavelength data for the channel
         flux = data[f'flux_{channel}']
         flux = np.transpose(flux, (1, 2, 0))
-        flux = flux[0]
-        flux = flux[::-1, :]
 
         wavelengths = data[f'wavelengths_{channel}']
         wavelengths = wavelengths.T
-        wavelengths = wavelengths[::-1, :]
 
         var = data[f'f_var_{channel}']
         var = np.transpose(var, (1, 2, 0))
-        var = var[0]
-        var = var[::-1, :]
-        std = np.sqrt(var)
-        std = std / np.sum(std)
 
-        # Applying blaze model and normalisation
-        blaze = blaze_model(flux)
-        normalised_spec = flux / blaze
-        normalised_spec = normalised_spec / blaze_model(normalised_spec, window=25)
-        ones_array = np.ones_like(flux)
+        wave_1ds = []
+        spec_1ds = []
+        print(f"---Constructing 1D for {channel} arm")
+        for i in tqdm(range(0,len(flux))):
 
-        # Stiching and normalising the 1D spectrum
-        wave_1d, spec_1d = spec_stich_n_norm(normalised_spec, wavelengths, ones_array, std)
+            flux_i = flux[i]
+            flux_i = flux_i[::-1, :]
 
-        return wave_1d, spec_1d
+            wavelengths_i = wavelengths[::-1, :]
+
+            var_i = var[i]
+            var_i = var_i[::-1, :]
+
+            std = np.sqrt(var_i)
+            std = std / np.sum(std)
+
+            # Applying blaze model and normalisation
+            blaze = blaze_model(flux_i)
+            normalised_spec = flux_i / blaze
+            normalised_spec = normalised_spec / blaze_model(normalised_spec, window=25)
+            ones_array = np.ones_like(flux_i)
+
+            # Stiching and normalising the 1D spectrum
+            wave_1d, spec_1d = spec_stich_n_norm(normalised_spec, wavelengths_i, ones_array, std)
+            wave_1ds.append(wave_1d)
+            spec_1ds.append(spec_1d)
+
+        return wave_1ds, spec_1ds
     # Load the data
 
     inpath = inpath.as_posix()
@@ -1567,26 +1579,38 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
     file_name = inpath + "/" + data_file + ".npz"
 
     data = np.load(file_name)
+
     flux_red = data['flux_red']
     flux_blue = data['flux_blue']
 
     wavelengths_red = ops.vactoair(data['wavelengths_red'])
     wavelengths_blue = ops.vactoair(data['wavelengths_blue'])
+    dates = np.datetime_as_string(data['time'])
 
     berv_red = data['brv_red']
     berv_blue = data['brv_blue']
+    airmass = data['airmass']
 
     # Taking the median between the berv estimates
     berv = np.median([berv_red,berv_blue],axis=0)/1000
 
-    if construct_s1d=="MAROON-X":
-
+    if construct_s1d:
         #Computer the 1D Spectrum
         wave_1d_blue, spec_1d_blue = process_channel_data_unified(data, 'blue')
         wave_1d_red, spec_1d_red = process_channel_data_unified(data, 'red')
-        new_wave_1d_blue, new_wave_1d_red = make_same_shape(wave_1d_blue, wave_1d_red)
-        new_spec_1d_blue, new_spec_1d_red = make_same_shape(spec_1d_blue, spec_1d_red)
-        wave_1d, spec_1d = average_overlapping_regions(new_wave_1d_blue, new_spec_1d_blue, new_wave_1d_red, new_spec_1d_red)
+
+        wave1ds = []
+        s1ds = []
+        for i in range(0,len(wave_1d_blue)):
+            new_wave_1d_blue, new_wave_1d_red = make_same_shape(wave_1d_blue[i], wave_1d_red[i])
+            new_spec_1d_blue, new_spec_1d_red = make_same_shape(spec_1d_blue[i], spec_1d_red[i])
+            wave1d, s1d = average_overlapping_regions(new_wave_1d_blue, new_spec_1d_blue, new_wave_1d_red, new_spec_1d_red)
+            wave1ds.append(wave1d)
+            s1ds.append(s1d)
+
+        wave1d = wave1ds
+        s1d = s1ds
+
 
     # Determine the number of pixels for red and blue
     num_pixels_red = wavelengths_red.shape[0]
@@ -1637,7 +1661,6 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
     e2ds = e2ds[:, :, ::-1]
 
     # Creating the date values
-    dates = np.datetime_as_string(data['time'])
     date = dates
     date = list(date)
 
@@ -1677,13 +1700,29 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
     norders = np.array(len(dates) * [data_shape[1]])
 
     #Extracting the airmass
-    airmass = data['airmass']
 
     #The variable header is no longer used so we can just pass it as an empty list
     header = []
 
-    output = {'wave': list(wave), 'e2ds': list(e2ds),
-              'mjd': mjd, 'date': date, 'texp': texp, 'obstype': obstype, 'framename': framename, 'npx': npx,
-              'norders': norders, 'berv': berv, 'airmass': airmass, 'header': header}
+    # Create a new header
+    s1dhdrs = []
+    for i in range(0,len(mjd)):
+        s1dhdr = fits.Header()
+        dat = date[i]
+        s1dhdr['MJD'] = mjd[i]
+        zpt = Time(Time(int(Time(dat).mjd), format='mjd').isot)
+        t = Time(dat, format='isot', scale='utc')
+        s1dhdr['DATE-OBS-S'] = (abs(zpt - t)).to_value('sec')
+        s1dhdrs.append(s1dhdr)
+
+    if construct_s1d:
+        output = {'wave': list(wave), 'e2ds': list(e2ds), 'header': header, 'wave1d': wave1d, 's1d': s1d, 's1dhdr': s1dhdrs,
+                  'mjd': mjd, 'date': date, 'texp': texp, 'obstype': obstype, 'framename': framename, 'npx': npx,
+                  'norders': norders, 'berv': berv, 'airmass': airmass, 's1dmjd': mjd}
+
+    else:
+        output = {'wave': list(wave), 'e2ds': list(e2ds),
+                  'mjd': mjd, 'date': date, 'texp': texp, 'obstype': obstype, 'framename': framename, 'npx': npx,
+                  'norders': norders, 'berv': berv, 'airmass': airmass, 'header': header}
 
     return output

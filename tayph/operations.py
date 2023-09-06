@@ -1016,6 +1016,7 @@ def clean_block(wl,block,deg=0,w=200,nsigma=5.0,verbose=False,renorm=True,parall
     return(wl_trimmed,np.transpose(np.transpose(block)*avg_flux),r)
 
 def blaze_model(blaze,sdev=3,window=300):
+    from scipy.ndimage import uniform_filter1d
     """Applies running average fit of the blaze order data.
         args:
             blaze: the average escelle blaze data
