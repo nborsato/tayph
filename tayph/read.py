@@ -1295,6 +1295,17 @@ def read_hires_makee(inpath,filelist,construct_s1d=True,N_CCD=3):
                     s1d.append(concatenated_spec)
                     hdr1d['TELALT'] = float(hdr1d['EL'])
                     hdr1d['UTC'] = (float(hdr1d['MJD'])%1.0)*86400.0
+                    del hdr1d['SLITSIZE']
+                    del hdr1d['SLITLENG']
+                    s1dhdr.append(hdr1d)
+
+                    t = Time(hdr1d['DATE-OBS'], format='isot', scale='utc')
+                    hdr1d['MJD'] = float(t.mjd)
+                    zpt = Time(Time(int(Time(hdr1d['DATE-OBS']).mjd), format='mjd').isot)
+                    hdr1d['DATE-OBS-S'] = (abs(zpt - t)).to_value('sec')
+
+                    hdul.writeto(path + dir_list[i], overwrite=True)
+
                     s1dhdr.append(hdr1d)
                     s1dmjd=np.append(s1dmjd,float(hdr1d['MJD']))
                     berv1d = berv_i
