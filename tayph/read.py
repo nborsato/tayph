@@ -1722,8 +1722,8 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
         s1dhdr = fits.Header()
         dat = date[i]
         #s1dhdr['MJD'] = mjd[i]
-        s1dhdr['DATE-OBS'] = dat
-        t = Time(s1dhdr['DATE-OBS'], format='isot', scale='utc')
+        #s1dhdr['DATE-OBS'] = dat
+        t = Time(dat, format='isot', scale='utc')
         s1dhdr['MJD'] = float(t.mjd)
         s1dhdr['UTC'] = (float(s1dhdr['MJD']) % 1.0) * 86400.0
         zpt = Time(Time(int(Time(dat).mjd), format='mjd').isot)
