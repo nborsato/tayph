@@ -1192,6 +1192,7 @@ def read_hires_makee(inpath,filelist,construct_s1d=True,N_CCD=3):
     the individual spectral orders (which are fairly flat, so that is nice.)"""
 
     from tayph.system_parameters import calculateberv
+    from astropy.time import Time
 
     #The following variables define lists in which all the necessary data will be stored.
     framename=[]
