@@ -1715,25 +1715,27 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
     #The variable header is no longer used so we can just pass it as an empty list
     header = []
 
+    s1dmjd = np.array([])
     # Create a new header
     s1dhdrs = []
     for i in range(0,len(mjd)):
         s1dhdr = fits.Header()
         dat = date[i]
         #s1dhdr['MJD'] = mjd[i]
-        s1dhdr['DATE-OBS'] = dates[i]
+        s1dhdr['DATE-OBS'] = dat
         t = Time(s1dhdr['DATE-OBS'], format='isot', scale='utc')
         s1dhdr['MJD'] = float(t.mjd)
         s1dhdr['UTC'] = (float(s1dhdr['MJD']) % 1.0) * 86400.0
         zpt = Time(Time(int(Time(dat).mjd), format='mjd').isot)
         t = Time(dat, format='isot', scale='utc')
         s1dhdr['DATE-OBS-S'] = (abs(zpt - t)).to_value('sec')
+        s1dmjd = np.append(s1dmjd, float(s1dhdr['MJD']))
         s1dhdrs.append(s1dhdr)
 
     if construct_s1d:
         output = {'wave': list(wave), 'e2ds': list(e2ds), 'header': header, 'wave1d': wave1d, 's1d': s1d, 's1dhdr': s1dhdrs,
                   'mjd': mjd, 'date': date, 'texp': texp, 'obstype': obstype, 'framename': framename, 'npx': npx,
-                  'norders': norders, 'berv': berv, 'airmass': airmass, 's1dmjd': mjd}
+                  'norders': norders, 'berv': berv, 'airmass': airmass, 's1dmjd': s1dmjd}
 
     else:
         output = {'wave': list(wave), 'e2ds': list(e2ds),
