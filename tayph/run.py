@@ -1494,7 +1494,7 @@ config=False,save_figure=True,skysub=False,rawpath=None,nod='both'):
 
 
 
-    if mode in ['HARPS','HARPSN','ESPRESSO','CARMENES-VIS','GIANO-B','CRIRES','HIRES-MAKEE','FIES','NIRPS','FOCES']:
+    if mode in ['HARPS','HARPSN','ESPRESSO','CARMENES-VIS','GIANO-B','CRIRES','HIRES-MAKEE','FIES','NIRPS','FOCES','MAROON-X']:
         read_s1d = True
     else:
         read_s1d = False
@@ -1575,7 +1575,7 @@ config=False,save_figure=True,skysub=False,rawpath=None,nod='both'):
     elif mode == 'FOCES':
         DATA = read_foces(inpath, filelist, mode)
     elif mode == 'MAROON-X':
-        DATA = read_maroonx(inpath, filelist, mode)
+        DATA = read_maroonx(inpath, filelist, read_s1d)
     else:
         raise ValueError(f'Error in read_e2ds: {mode} is not a valid instrument.')
 

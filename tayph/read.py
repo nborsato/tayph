@@ -1305,7 +1305,6 @@ def read_hires_makee(inpath,filelist,construct_s1d=True,N_CCD=3):
                     hdr1d['DATE-OBS-S'] = (abs(zpt - t)).to_value('sec')
 
                     hdul.writeto(path + dir_list[i], overwrite=True)
-
                     s1dhdr.append(hdr1d)
                     s1dmjd=np.append(s1dmjd,float(hdr1d['MJD']))
                     berv1d = berv_i
