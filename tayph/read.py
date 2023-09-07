@@ -1729,7 +1729,7 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
         #s1dhdr['UTC'] = (float(s1dhdr['MJD']) % 1.0) * 86400.0
         zpt = Time(Time(int(Time(dat).mjd), format='mjd').isot)
         s1dhdr['DATE-OBS-S'] = (abs(zpt - t)).to_value('sec')
-        s1dmjd = np.append(s1dmjd, float(s1dhdr['MJD']))
+        s1dmjd = np.append(s1dmjd, t.mjd)
         s1dhdrs.append(s1dhdr)
 
     if construct_s1d:
