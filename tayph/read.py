@@ -1549,7 +1549,7 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
         flux = np.transpose(flux, (1, 2, 0))
 
         wavelengths = data[f'wavelengths_{channel}']
-        #wavelengths = ops.vactoair(wavelengths)
+        wavelengths = ops.vactoair(wavelengths)
         wavelengths = wavelengths.T
 
         var = data[f'f_var_{channel}']
