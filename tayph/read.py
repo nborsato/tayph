@@ -1549,6 +1549,7 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
         flux = np.transpose(flux, (1, 2, 0))
 
         wavelengths = data[f'wavelengths_{channel}']
+        wavelengths = ops.vactoair(wavelengths)
         wavelengths = wavelengths.T
 
         var = data[f'f_var_{channel}']
@@ -1572,12 +1573,12 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
 
             # Applying blaze model and normalisation
             blaze = blaze_model(flux_i)
-            normalised_spec = flux_i / blaze
-            normalised_spec = normalised_spec / blaze_model(normalised_spec, window=25)
-            ones_array = np.ones_like(flux_i)
+            #normalised_spec = flux_i / blaze
+            #normalised_spec = normalised_spec / blaze_model(normalised_spec, window=25)
+            #ones_array = np.ones_like(flux_i)
 
             # Stiching and normalising the 1D spectrum
-            wave_1d, spec_1d = spec_stich_n_norm(normalised_spec, wavelengths_i, ones_array, std)
+            wave_1d, spec_1d = spec_stich_n_norm(flux_i, wavelengths_i, blaze, std)
             wave_1d = wave_1d*10
             wave_1ds.append(wave_1d)
             spec_1ds.append(spec_1d)
