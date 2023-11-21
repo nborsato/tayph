@@ -1269,8 +1269,8 @@ def read_hires_makee(inpath,filelist,construct_s1d=True,N_CCD=3):
                 wavedata3=ops.vactoair(ut.read_wave_from_makee_header(hdr3)/10.0)
 
                 merged_wave = np.vstack((wavedata1,wavedata2,wavedata3))
-                gamma = (1.0-(berv_i*u.km/u.s/const.c).decompose().value)#BERV.
-                gamma  = 1
+                gamma = (1.0+(berv_i*u.km/u.s/const.c).decompose().value)#BERV.
+                #gamma  = 1
                 wave.append(merged_wave*gamma)#Remove BERV.
 
 
@@ -1624,54 +1624,65 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
         wave1d = wave1ds
         s1d = s1ds
 
-
     # Determine the number of pixels for red and blue
     num_pixels_red = wavelengths_red.shape[0]
     num_pixels_blue = wavelengths_blue.shape[0]
     length_difference = num_pixels_red - num_pixels_blue
 
-    # Initialize expanded blue wavelength and flux arrays
-    expanded_wavelengths_blue = np.zeros((num_pixels_red, wavelengths_blue.shape[1]))
-    padded_flux_blue = np.zeros((num_pixels_red, flux_blue.shape[1], flux_blue.shape[2]))
+    # Extracting the flux and wavelength data for the channel
+    flux_red = np.transpose(flux_red, (1, 2, 0))
+    flux_blue = np.transpose(flux_blue, (1, 2, 0))
 
-    # Insert NaNs for the first 'length_difference' elements in blue orders
-    expanded_wavelengths_blue[:length_difference, :] = np.nan
-    padded_flux_blue[:length_difference, :, :] = np.nan
+    wavelengths_red = wavelengths_red.T
+    wavelengths_blue = wavelengths_blue.T
 
-    # Set the first 'length_difference' elements in blue orders to NaN
-    expanded_wavelengths_blue[:length_difference, :] = np.nan
-    padded_flux_blue[:length_difference, :, :] = np.nan
+    new_exposures = []
+    new_waves = []
 
-    # Vectorised version to expand blue wavelengths for all orders
-    expanded_wavelengths_blue[length_difference:, :] = wavelengths_blue[:, :]
+    # MAROON-X organises its arrays in an unusual manner. The following loops restructure the 2D echelle spectra so that
+    #they are ordered from blue to red wavelengths, and then stacked according to the number of exposures. Additionally,
+    #the blue orders have fewer pixel values than the red; therefore, the code pads the difference with NaNs to ensure
+    #they are of the same size.
 
-    # Vectorised version to pad flux with NaN for the expanded part
-    padded_flux_blue[length_difference:, :, :] = flux_blue[:, :, :]
+    for i in range(0,len(flux_blue)): #loop over exposures
+        new_flux_blue = []
+        new_wave_blue = []
+        exp_flux_n = flux_blue[i]
+        for j in range(0,len(exp_flux_n)):
+            wave_grid = wavelengths_blue[j]
+            flux_grid = exp_flux_n[j]
 
-    # Concatenate red and blue arrays
-    stacked_wavelengths = np.hstack((wavelengths_red, expanded_wavelengths_blue))
-    stacked_flux = np.concatenate((flux_red, padded_flux_blue), axis=2)
+            flux_grid = np.append(flux_grid,[np.nan]*length_difference)
+            new_flux_blue.append(flux_grid)
 
-    # Reshape the 2D stacked wavelength array into a 3D array
-    reshaped_wavelengths = stacked_wavelengths[:, :, np.newaxis]
+            wave_grid = np.append(wave_grid,np.linspace(wave_grid[-1],wave_grid[-1]+length_difference,length_difference))
+            new_wave_blue.append(wave_grid)
 
-    # Replicate the 3D wavelength array across the third dimension to match the shape of the stacked flux array
-    stacked_wavelengths_3d = np.tile(reshaped_wavelengths, (1, 1, stacked_flux.shape[1]))
-    wave = stacked_wavelengths_3d
+        new_wave_blue.reverse()
+        new_flux_blue.reverse()
 
-    # Transposing the stacked flux array to have the exposures as the first dimension of the array
-    transposed_stacked_flux = np.transpose(stacked_flux, (1, 2, 0))
-    e2ds = transposed_stacked_flux
+        new_wave_red = []
+        new_flux_red = []
+        exp_flux_n = flux_red[i]
+        for j in range(0, len(exp_flux_n)):
+            flux_grid = exp_flux_n[j]
+            new_flux_red.append(flux_grid)
 
-    # Transposing the final stacked wavelengths 3D array to have the exposures as the first dimension of the array
-    transposed_stacked_wavelengths_3d = np.transpose(stacked_wavelengths_3d, (2, 1, 0))
-    wave = transposed_stacked_wavelengths_3d
-    wave = wave[:, ::-1, :]
-    wave = wave[:, :, ::-1]
+            wave_grid = wavelengths_red[j]
+            new_wave_red.append(wave_grid)
 
-    e2ds = transposed_stacked_flux
-    e2ds = e2ds[:, ::-1, :]
-    e2ds = e2ds[:, :, ::-1]
+        new_wave_red.reverse()
+        new_flux_red.reverse()
+
+        new_flux = np.vstack([new_flux_blue,new_flux_red])
+        new_wave = np.vstack([new_wave_blue,new_wave_red])
+
+        new_exposures.append(new_flux)
+        new_waves.append(new_wave)
+
+    #Set names for the e2ds arrays
+    e2ds = new_exposures
+    wave = new_waves
 
     # Creating the date values
     date = dates
@@ -1696,7 +1707,7 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
     framename = framename[0]
 
     # Number of exposures
-    num_exposures = len(dates) * [len(dates)]
+    num_exposures = 58
 
     # Creating a suffix array with values from _1 to _59
     suffixes = np.arange(1, len(dates) + 1)
@@ -1705,14 +1716,23 @@ def read_maroonx(inpath,filelist,construct_s1d=True):
     framename = np.core.defchararray.add(framename + '_', suffixes.astype(str))
 
     # Extracting the number of pixels
-    data_shape = transposed_stacked_flux.shape
-    npx = np.array(len(dates) * [data_shape[2]])
+    data_shape = num_pixels_red
+    npx = 4036
 
     # Extracting the number of orders
-    data_shape = transposed_stacked_flux.shape
-    norders = np.array(len(dates) * [data_shape[1]])
+    data_shape = len(new_exposures)
+    norders = 61
+
+    # Extracting the number of pixels
+    data_shape = num_pixels_red
+    npx = np.array(len(dates) * [4036])
+
+    # Extracting the number of orders
+    data_shape = len(new_exposures)
+    norders = np.array(len(dates) * [61])
 
     #Extracting the airmass
+    #pdb.set_trace()
 
     #The variable header is no longer used so we can just pass it as an empty list
     header = []
