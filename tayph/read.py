@@ -1366,7 +1366,7 @@ def read_fies(inpath,filelist,mode,read_s1d=True):
                 mjd = np.append(mjd, t.mjd)#FIES Header doesn't provide mjd
                 npx = np.append(npx, hdr['NAXIS1'])
                 norders = np.append(norders, hdr['NAXIS2'])
-                e2ds.append(data[0]/data[2]**2)#Using bandID1
+                e2ds.append(data[0]/data[2])#Using bandID1
                 berv_i = sp.calculateberv(Time(hdr['DATE-OBS']),
                                           [hdr['OBSGEO-X'], hdr['OBSGEO-Y'], hdr['OBSGEO-Z']],
                                           hdr['RA'],
