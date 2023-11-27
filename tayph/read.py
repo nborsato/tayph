@@ -228,8 +228,10 @@ def read_carmenes(inpath,filelist,channel,construct_s1d=True):
                 e2ds.append(data)
                 blaze.append(data/sigma**2)
                 berv=np.append(berv,hdr[bervkeyword])
+                gamma = (1.0 + (hdr[bervkeyword] * u.km / u.s / const.c).decompose().value)  # Doppler factor BERV.
+                #gamma = 1
                 airmass=np.append(airmass,0.5*(hdr[Zstartkeyword]+hdr[Zendkeyword]))#This is an approximation where we take the mean airmass.
-                wave.append(ops.vactoair(wavedata))
+                wave.append(ops.vactoair(wavedata)*gamma)
 
 
                 if construct_s1d:
@@ -242,8 +244,8 @@ def read_carmenes(inpath,filelist,channel,construct_s1d=True):
                     s1dhdr.append(hdr1d)
                     s1dmjd=np.append(s1dmjd,hdr1d['MJD-OBS'])
                     berv1d = hdr1d[bervkeyword]
-                    gamma = (1.0-(berv1d*u.km/u.s/const.c).decompose().value)#Doppler factor BERV.
-                    gamma = 1 #turning berv off
+                    gamma = (1.0+(berv1d*u.km/u.s/const.c).decompose().value)#Doppler factor BERV.
+                    #gamma = 1 #turning berv off
                     wave1d.append(ops.vactoair(wave_1d)*gamma*10)
 
     BLAZE_Model = blaze_model(np.nanmean(blaze, axis = 0)) #Calucalting blaze model
