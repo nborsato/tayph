@@ -1475,7 +1475,6 @@ def read_foces(inpath,filelist,mode,construct_s1d=True):
             berv = np.append(berv, berv_i)
             airmass = np.append(airmass, 1) #foces doesn't provide an airmass measurement, need to find a work around
 
-            gamma = (1.0 - (berv_i * u.km / u.s / const.c).decompose().value)
             gamma = 1
             wave.append(np.array(collected_waves*gamma)/10)
 
@@ -1491,7 +1490,8 @@ def read_foces(inpath,filelist,mode,construct_s1d=True):
                 s1dhdr.append(hdr1d)
                 s1dmjd = np.append(s1dmjd, t.mjd)
 
-                wave1d.append(wave_1ds)
+                gamma = (1.0 - (berv_i * u.km / u.s / const.c).decompose().value)
+                wave1d.append(wave_1ds*gamma[-1])
 
 
     if construct_s1d:
