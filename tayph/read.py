@@ -1398,7 +1398,7 @@ def read_fies(inpath,filelist,mode,read_s1d=True):
                                               hdr['DEC'],
                                               "FIES")
                     gamma = (1.0 - (berv1d * u.km / u.s / const.c).decompose().value)  # Doppler factor BERV.
-                    gamma = 1
+                    #gamma = 1
                     wave1d.append(np.linspace(hdr1d['CRVAL1'],hdr1d['CRVAL1'] + hdr1d['CDELT1']*len(data_1d),len(data_1d))*gamma)
 
     output = {'wave': wave, 'e2ds': e2ds, 'header': header, 'wave1d': wave1d, 's1d': s1d, 's1dhdr': s1dhdr,
