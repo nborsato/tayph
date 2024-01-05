@@ -112,12 +112,13 @@ def read_harpslike(inpath,filelist,mode,read_s1d=True):
                 norders=np.append(norders,hdr['NAXIS2'])
                 e2ds.append(data)
                 berv=np.append(berv,hdr[bervkeyword])
+                gamma = (1.0 - (hdr[bervkeyword] * u.km / u.s / const.c).decompose().value)
                 airmass=np.append(airmass,0.5*(hdr[Zstartkeyword]+hdr[Zendkeyword]))#This is an approximation where we take the mean airmass.
                 # if nowave == True:
                 # wavefile_used.append(hdr[thfilekeyword])
                 #Record which wavefile was used by the pipeline to
                 #create the wavelength solution.
-                wavedata=ut.read_wave_from_e2ds_header(hdr,mode=mode)/10.0#convert to nm.
+                wavedata=ut.read_wave_from_e2ds_header(hdr,mode=mode)*gamma/10.0#convert to nm.
                 wave.append(wavedata)
                 # if filelist[i].endswith('wave_A.fits'):
                 #     print(filelist[i]+' (wave)')
@@ -1302,9 +1303,9 @@ def read_hires_makee(inpath,filelist,construct_s1d=True,N_CCD=3):
                     del hdr1d['SLITLENG']
                     s1dhdr.append(hdr1d)
 
-                    t = Time(hdr1d['DATE-OBS'], format='isot', scale='utc')
-                    hdr1d['MJD'] = float(t.mjd)
-                    zpt = Time(Time(int(Time(hdr1d['DATE-OBS']).mjd), format='mjd').isot)
+                    t = Time(hdr1d['DATE'], format='isot', scale='utc')
+                    hdr1d['MJD_ME'] = float(t.mjd)
+                    zpt = Time(Time(int(Time(hdr1d['DATE']).mjd), format='mjd').isot)
                     hdr1d['DATE-OBS-S'] = (abs(zpt - t)).to_value('sec')
 
                     #hdul.writeto(path + dir_list[i], overwrite=True)
@@ -1380,6 +1381,12 @@ def read_fies(inpath,filelist,mode,read_s1d=True):
                 wave.append(wavedata)
 
                 if read_s1d:
+
+                    #blaze = blaze_model(data[0])
+                    #wave_1d, data_1d = spec_stich_n_norm(data[0], wavedata, blaze, data[2])
+                    #wave_1d = wave_1d*10
+                    #pdb.set_trace()
+
                     s1d_path = inpath / Path(str(filelist[i]).replace('10_wave.fits', '11_merge.fits'))
                     hdul = fits.open(s1d_path)
                     data_1d = copy.deepcopy(hdul[0].data)
@@ -1397,9 +1404,11 @@ def read_fies(inpath,filelist,mode,read_s1d=True):
                                               hdr['RA'],
                                               hdr['DEC'],
                                               "FIES")
-                    gamma = (1.0 - (berv1d * u.km / u.s / const.c).decompose().value)  # Doppler factor BERV.
-                    #gamma = 1
+                    #gamma = (1.0 - (berv1d * u.km / u.s / const.c).decompose().value)  # Doppler factor BERV.
+                    gamma = 1
                     wave1d.append(np.linspace(hdr1d['CRVAL1'],hdr1d['CRVAL1'] + hdr1d['CDELT1']*len(data_1d),len(data_1d))*gamma)
+                    #wave1d.append(wave_1d)
+    #pdb.set_trace()
 
     output = {'wave': wave, 'e2ds': e2ds, 'header': header, 'wave1d': wave1d, 's1d': s1d, 's1dhdr': s1dhdr,
               'mjd': mjd, 'date': date, 'texp': texp, 'obstype': obstype, 'framename': framename, 'npx': npx,
@@ -1490,7 +1499,8 @@ def read_foces(inpath,filelist,mode,construct_s1d=True):
                 s1dhdr.append(hdr1d)
                 s1dmjd = np.append(s1dmjd, t.mjd)
 
-                gamma = (1.0 - (berv_i * u.km / u.s / const.c).decompose().value)
+                #gamma = (1.0 - (berv_i * u.km / u.s / const.c).decompose().value)
+                gamma = [1]
                 wave1d.append(wave_1ds*gamma[-1])
 
 
