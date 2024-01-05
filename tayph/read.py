@@ -112,13 +112,12 @@ def read_harpslike(inpath,filelist,mode,read_s1d=True):
                 norders=np.append(norders,hdr['NAXIS2'])
                 e2ds.append(data)
                 berv=np.append(berv,hdr[bervkeyword])
-                gamma = (1.0 - (hdr[bervkeyword] * u.km / u.s / const.c).decompose().value)
                 airmass=np.append(airmass,0.5*(hdr[Zstartkeyword]+hdr[Zendkeyword]))#This is an approximation where we take the mean airmass.
                 # if nowave == True:
                 # wavefile_used.append(hdr[thfilekeyword])
                 #Record which wavefile was used by the pipeline to
                 #create the wavelength solution.
-                wavedata=ut.read_wave_from_e2ds_header(hdr,mode=mode)*gamma/10.0#convert to nm.
+                wavedata=ut.read_wave_from_e2ds_header(hdr,mode=mode)/10.0#convert to nm.
                 wave.append(wavedata)
                 # if filelist[i].endswith('wave_A.fits'):
                 #     print(filelist[i]+' (wave)')
