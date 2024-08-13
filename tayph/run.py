@@ -144,6 +144,7 @@ def start_run(configfile,parallel=True,xcor_parallel=False,dp='',debug=False):
             # 'invert_template':sp.paramget('invert_template',cf,full_path=True),
             'template_library':sp.paramget('template_library',cf,full_path=True),
             'model_library':sp.paramget('model_library',cf,full_path=True),
+            'bootstrap': sp.paramget('bootstrap', cf, full_path=True),
             'debug':debug
     }
     #Optional keywords:
@@ -253,6 +254,8 @@ def run_instance(p,parallel=True,xcor_parallel=False):
     maskname = p['maskname']
     RVrange = p['RVrange']
     drv = p['drv']
+    bootstrap = p['bootstrap']
+
     try:#Lazy way of giving this a default and creating backward compatibility with old-style config files.
         intransit = p['transit']
         sinusoid = p['sinusoid']
@@ -398,86 +401,83 @@ def run_instance(p,parallel=True,xcor_parallel=False):
     if do_xcor == True or plot_xcor == True or make_mask == True:
         ut.tprint(f'---Loading orders from {dp}.')
 
-
         for i in order_numbers:
-            wavepath = dp/f'wave_{i}.fits'
-            orderpath= dp/f'order_{i}.fits'
-            sigmapath= dp/f'sigma_{i}.fits'
-            ut.check_path(wavepath,exists=True)
-            ut.check_path(orderpath,exists=True)
-            ut.check_path(sigmapath,exists=False)
-            wave_order = ut.readfits(wavepath)#2D or 1D?
+            wavepath = dp / f'wave_{i}.fits'
+            orderpath = dp / f'order_{i}.fits'
+            sigmapath = dp / f'sigma_{i}.fits'
+            ut.check_path(wavepath, exists=True)
+            ut.check_path(orderpath, exists=True)
+            ut.check_path(sigmapath, exists=False)
+            wave_order = ut.readfits(wavepath)  # 2D or 1D?
             order_i = ut.readfits(orderpath)
 
-            #Check dimensionality of wave axis and order. Either 2D or 1D.
+            # Check dimensionality of wave axis and order. Either 2D or 1D.
             if wave_order.ndim == 2:
                 if i == np.min(order_numbers):
                     ut.tprint('------Wavelength axes provided are 2-dimensional.')
-                n_px = np.shape(wave_order)[1]#Pixel width of the spectral order.
-                dimtest(wave_order,np.shape(order_i),'wave_order in tayph.run_instance()')
-                #Need to have same shape.
+                n_px = np.shape(wave_order)[1]  # Pixel width of the spectral order.
+                dimtest(wave_order, np.shape(order_i), 'wave_order in tayph.run_instance()')
+                # Need to have same shape.
             elif wave_order.ndim == 1:
                 if i == np.min(order_numbers):
                     ut.tprint('------Wavelength axes provided are 1-dimensional.')
                 n_px = len(wave_order)
-                dimtest(order_i,[0,n_px],f'order {i} in run_instance()')
+                dimtest(order_i, [0, n_px], f'order {i} in run_instance()')
             else:
                 raise Exception(f'Wavelength axis of order {i} is neither 1D nor 2D.')
 
             if i == np.min(order_numbers):
-                n_exp = np.shape(order_i)[0]#For the first order, we fix n_exp.
-                #All other orders should have the same n_exp.
+                n_exp = np.shape(order_i)[0]  # For the first order, we fix n_exp.
+                # All other orders should have the same n_exp.
                 ut.tprint(f'------{n_exp} exposures recognised.')
             else:
-                dimtest(order_i,[n_exp,n_px],f'order {i} in run_instance()')
+                dimtest(order_i, [n_exp, n_px], f'order {i} in run_instance()')
 
-
-
-
-            #Deal with air or vaccuum wavelengths:
+            # Deal with air or vacuum wavelengths:
             if air == False:
                 if i == np.min(order_numbers):
-                    ut.tprint("------Assuming wavelengths are in vaccuum.")
+                    ut.tprint("------Assuming wavelengths are in vacuum.")
                 list_of_wls.append(copy.deepcopy(wave_order))
             else:
                 if i == np.min(order_numbers):
                     ut.tprint("------Applying airtovac correction.")
                 list_of_wls.append(ops.airtovac(wave_order))
 
-
-            #Now test for negatives, set them to NaN and track them.
+            # Now test for negatives, set them to NaN and track them.
             n_negative = len(order_i[order_i <= 0])
             if trigger3 == 0 and n_negative > 0:
                 print("------Setting negative values to NaN.")
                 trigger3 = -1
-            n_negative_total+=n_negative
-            order_i[order_i <= 0] = np.nan #This is very important for later when we are computing
-            #average spectra and the like, to avoid divide-by-zero cases.
-            postest(order_i,f'order {i} in run_instance().')#make sure whatever comes out here is
-            #strictly positive.
-            list_of_orders.append(order_i)
+            n_negative_total += n_negative
+            order_i[order_i <= 0] = np.nan  # This is very important for later when we are computing
+            # average spectra and the like, to avoid divide-by-zero cases.
+            postest(order_i, f'order {i} in run_instance().')  # make sure whatever comes out here is
+            # strictly positive.
 
-
-
-
-            #Try to get a sigma file. If it doesn't exist, we raise a warning. If it does, we test
-            #its dimensions and append it.
+            # Try to get a sigma file. If it doesn't exist, we raise a warning. If it does, we test
+            # its dimensions and append it.
             try:
                 sigma_i = ut.readfits(sigmapath)
-                dimtest(sigma_i,[n_exp,n_px],f'order {i} in run_instance().')
+                dimtest(sigma_i, [n_exp, n_px], f'order {i} in run_instance().')
                 list_of_sigmas.append(sigma_i)
             except FileNotFoundError:
                 if trigger2 == 0:
                     ut.tprint('------WARNING: Sigma (flux error) files not provided. '
-                    'Assuming sigma = sqrt(flux). This is standard practise for HARPS data, but '
-                    'e.g. ESPRESSO has a pipeline that computes standard errors on each pixel more '
-                    'accurately. The sqrt approximation is known to be inappropriate for data '
-                    'of CARMENES or GIANO, because these pipeline renormalise the spectra. Make '
-                    'sure that the errors are treated properly, otherwise the error-bars on the '
-                    'output CCFs will be invalid.')
-                    trigger2=-1
-                list_of_sigmas.append(np.sqrt(order_i))
+                              'Assuming sigma = sqrt(flux). This is standard practise for HARPS data, but '
+                              'e.g. ESPRESSO has a pipeline that computes standard errors on each pixel more '
+                              'accurately. The sqrt approximation is known to be inappropriate for data '
+                              'of CARMENES or GIANO, because these pipeline renormalise the spectra. Make '
+                              'sure that the errors are treated properly, otherwise the error-bars on the '
+                              'output CCFs will be invalid.')
+                    trigger2 = -1
+                sigma_i = np.sqrt(order_i)
+                list_of_sigmas.append(sigma_i)
 
+            # Randomly offset the order values assuming a normal distribution with sigma as the standard deviation
+            offset = np.random.normal(loc=0, scale=sigma_i)
+            order_i += offset
+
+            list_of_orders.append(order_i)
 
 
         #This ends the loop in which the data are read in. Print the final number of pixels that
@@ -950,6 +950,9 @@ def run_instance(p,parallel=True,xcor_parallel=False):
     ut.tprint('---Writing CCFs to file and peforming cleaning steps.')
     for i in range(len(T_names)):
         outpath = outpaths[i]
+        outpath = outpath / "bootstrap"
+        # Create the directory if it doesn't exist
+        outpath.mkdir(parents=True, exist_ok=True)
         if do_xcor:
             ut.tprint(f'------Writing CCF of {T_names[i]} to {str(outpath)}')
             ut.writefits(outpath/'ccf.fits',CCFs[i])
@@ -1022,11 +1025,11 @@ def run_instance(p,parallel=True,xcor_parallel=False):
 
         # pdb.set_trace()
         #Turn off KpVsys for now.
-        ut.tprint('---Constructing KpVsys')
-        Kp,KpVsys,KpVsys_e = construct_KpVsys(rv,ccf_clean_weighted,ccf_nne,dp,parallel=parallel,transit=intransit)
-        ut.writefits(outpath/'KpVsys.fits',KpVsys)
-        ut.writefits(outpath/'KpVsys_e.fits',KpVsys_e)
-        ut.writefits(outpath/'Kp.fits',Kp)
+        # ut.tprint('---Constructing KpVsys')
+        # Kp,KpVsys,KpVsys_e = construct_KpVsys(rv,ccf_clean_weighted,ccf_nne,dp,parallel=parallel,transit=intransit)
+        # ut.writefits(outpath/'KpVsys.fits',KpVsys)
+        # ut.writefits(outpath/'KpVsys_e.fits',KpVsys_e)
+        # ut.writefits(outpath/'Kp.fits',Kp)
 
     if debug==True and inject_model==False:
         ut.tprint('Halting at the end to give access to final variables.')
